@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smart Attendance System</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Prompt', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7', 900: '#0c4a6e' }
+                    }
+                },
+            },
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // ==========================================
+        // ⚙️ การตั้งค่า FIREBASE (แก้ไขตรงนี้!)
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyD-69dvab1Ensu3ZOxe8CBcaez1Bldpl-Q",
+            authDomain: "check-in-school-39c99.firebaseapp.com",
+            projectId: "check-in-school-39c99",
+            storageBucket: "check-in-school-39c99.firebasestorage.app",
+            messagingSenderId: "90118255540",
+            appId: "1:90118255540:web:c7ea56514d0a6d0b66f8e1",
+            measurementId: "G-1ZJE69B92X"
+        };
+
+        // Initialize Firebase
+        let db, auth;
+        let isConfigured = true; // Configured with real keys
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        
+        db = firebase.firestore();
+        auth = firebase.auth();
+        
+        // Enable Offline Persistence
+        db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+            if (err.code == 'failed-precondition') console.log('Multiple tabs open, persistence can only be enabled in one tab at a a time.');
+            else if (err.code == 'unimplemented') console.log('The current browser does not support all of the features required to enable persistence');
+        });
+
+        // ==========================================
+        // 🧩 Icons & Constants
+        // ==========================================
+        const Icons = {
+            Users: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+            CheckCircle2: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>,
+            XCircle: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>,
+            Clock: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+            ThermometerSun: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9a4 4 0 0 0-2 7.5"/><path d="M12 3v2"/><path d="M6.6 18.4a9 9 0 0 0 10.8 0"/><path d="M20 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>,
+            Plane: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 22h20"/><path d="M13 6 7 2H4c-.6 0-1 .4-1 1v12c0 .6.4 1 1 1h2l.5-1"/><path d="m13 6-3 3"/><path d="m10 9 6 7"/><path d="m16 16 3-1 3-3c.7-.7.7-1.7 0-2.4-.7-.7-1.7-.7-2.4 0l-3 3-1 3"/></svg>,
+            Search: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+            RotateCcw: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>,
+            UserPlus: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>,
+            Trash2: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+            PieChart: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10Z"/></svg>,
+            Save: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+            LayoutGrid: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>,
+            ListChecks: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>,
+            Menu: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>,
+            Calendar: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
+            BarChart4: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M13 17V9"/><path d="M18 17V5"/><path d="M8 17v-3"/></svg>,
+            GraduationCap: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>,
+            FileText: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>,
+            Copy: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>,
+            X: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+            ChevronRight: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>,
+            History: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>,
+            LayoutList: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7"/><path d="M14 9h7"/><path d="M14 15h7"/><path d="M14 20h7"/></svg>,
+            Settings: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+            Edit2: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+            Download: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>,
+            UserCog: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="15" r="3"/><circle cx="9" cy="7" r="4"/><path d="M10 15H6a4 4 0 0 0-4 4v2"/><path d="m21.7 16.4.9-.9"/><path d="m15.2 13.9-.9-.9"/><path d="m16.6 18.7.3 1.3"/><path d="m20.4 14.3.3-1.3"/><path d="m19 20.7.9.9"/><path d="m17 12.2-.9.9"/></svg>,
+            CalendarRange: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M17 14h-6"/><path d="M13 18H7"/><path d="M7 14h.01"/><path d="M17 18h.01"/></svg>,
+            AlertCircle: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>,
+            LogOut: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>,
+            Lock: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+            User: (p) => <svg {...p} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        };
+
+        // ==========================================
+        // 🚀 App Component
+        // ==========================================
+        const { useState, useEffect, useMemo } = React;
+
+        const STATUS_CONFIG = {
+            pending: { label: 'รอเช็ค', color: 'text-slate-500 bg-slate-100 border-slate-200 active:bg-slate-200', hex: '#f1f5f9', icon: <Icons.RotateCcw size={16} /> },
+            present: { label: 'มา', color: 'text-emerald-700 bg-emerald-100 border-emerald-200 active:bg-emerald-200', hex: '#10b981', icon: <Icons.CheckCircle2 size={16} /> },
+            late: { label: 'สาย', color: 'text-amber-700 bg-amber-100 border-amber-200 active:bg-amber-200', hex: '#f59e0b', icon: <Icons.Clock size={16} /> },
+            sick: { label: 'ป่วย', color: 'text-violet-700 bg-violet-100 border-violet-200 active:bg-violet-200', hex: '#8b5cf6', icon: <Icons.ThermometerSun size={16} /> },
+            leave: { label: 'ลา', color: 'text-blue-700 bg-blue-100 border-blue-200 active:bg-blue-200', hex: '#3b82f6', icon: <Icons.Plane size={16} /> },
+            absent: { label: 'ขาด', color: 'text-rose-700 bg-rose-100 border-rose-200 active:bg-rose-200', hex: '#f43f5e', icon: <Icons.XCircle size={16} /> },
+        };
+
+        const INITIAL_STUDENTS = [
+            { id: 1, studentId: '66001', name: 'ก้องภพ รักเรียน' },
+            { id: 2, studentId: '66002', name: 'ขวัญข้าว ใจดี' },
+            { id: 3, studentId: '66003', name: 'คณิน มั่นคง' },
+            { id: 4, studentId: '66004', name: 'งามตา สดใส' },
+            { id: 5, studentId: '66005', name: 'จิรายุ กล้าหาญ' },
+        ];
+
+        function App() {
+            // Check config
+            if (!isConfigured) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
+                        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md text-center">
+                            <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4"><Icons.Settings size={32} /></div>
+                            <h1 className="text-2xl font-bold text-slate-800 mb-2">ยังไม่ได้ตั้งค่า Firebase</h1>
+                            <p className="text-slate-500 mb-6">กรุณาแก้ไขโค้ดเพื่อใส่ <code>apiKey</code> และ Config อื่นๆ ของคุณในส่วนบนสุดของไฟล์ <code>index.html</code></p>
+                            <a href="https://console.firebase.google.com/" target="_blank" className="block w-full bg-slate-800 text-white py-3 rounded-xl font-medium hover:bg-slate-900 transition-all">ไปที่ Firebase Console</a>
+                        </div>
+                    </div>
+                )
+            }
+
+            // State
+            const [user, setUser] = useState(null);
+            const [userRole, setUserRole] = useState('teacher'); // default fallback
+            const [loading, setLoading] = useState(true);
+            const [students, setStudents] = useState([]);
+            const [attendanceRecords, setAttendanceRecords] = useState({});
+            const [currentDate, setCurrentDate] = useState(new Date().toISOString().split('T')[0]);
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [viewMode, setViewMode] = useState('grid');
+            const [sidebarOpen, setSidebarOpen] = useState(false);
+            const [showReportModal, setShowReportModal] = useState(false);
+            const [settings, setSettings] = useState({
+                schoolName: 'โรงเรียนตัวอย่าง',
+                className: 'มัธยมศึกษาปีที่ 6/1',
+                teacherName: 'ครูสมศรี ใจดี'
+            });
+
+            // Login Form State
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [loginError, setLoginError] = useState('');
+
+            // --- Firebase Listeners ---
+            useEffect(() => {
+                const unsubscribe = auth.onAuthStateChanged(u => {
+                    if (u) {
+                        setUser(u);
+                        // Auto-assign role based on email for easy testing
+                        if (u.email.includes('admin')) setUserRole('admin');
+                        else if (u.email.includes('student')) setUserRole('student');
+                        else setUserRole('teacher');
+                    } else {
+                        setUser(null);
+                    }
+                    setLoading(false);
+                });
+                return unsubscribe;
+            }, []);
+
+            useEffect(() => {
+                if (user) {
+                    // Fetch Settings
+                    db.collection('settings').doc('config').onSnapshot(doc => {
+                        if(doc.exists) setSettings(doc.data());
+                    });
+
+                    // Fetch Students
+                    const unsubStudents = db.collection('students').orderBy('studentId').onSnapshot(snapshot => {
+                        const loadedStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        if(loadedStudents.length === 0) {
+                            // Seed initial data if empty
+                            INITIAL_STUDENTS.forEach(s => db.collection('students').add(s));
+                        }
+                        setStudents(loadedStudents);
+                    });
+
+                    // Fetch Attendance for Current Date
+                    const unsubAttendance = db.collection('attendance').doc(currentDate).onSnapshot(doc => {
+                        if(doc.exists) {
+                            setAttendanceRecords(doc.data());
+                        } else {
+                            setAttendanceRecords({});
+                        }
+                    });
+
+                    return () => {
+                        unsubStudents();
+                        unsubAttendance();
+                    }
+                }
+            }, [user, currentDate]);
+
+            // --- Helpers ---
+            const getInitials = (name) => name ? name.split(' ').map(n => n[0]).join('').substring(0, 2) : '??';
+            const getAvatarColor = (id) => {
+                const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500', 'bg-rose-500', 'bg-indigo-500'];
+                let num = 0;
+                if(typeof id === 'string') {
+                    for(let i=0; i<id.length; i++) num += id.charCodeAt(i);
+                } else { num = id; }
+                return colors[num % colors.length];
+            };
+
+            // --- Logic ---
+            const handleLogin = (e) => {
+                e.preventDefault();
+                setLoginError('');
+                auth.signInWithEmailAndPassword(email, password)
+                    .catch(err => setLoginError("เกิดข้อผิดพลาด: " + err.message));
+            };
+
+            const handleLogout = () => auth.signOut();
+
+            // Computed Data
+            const currentViewStudents = useMemo(() => {
+                return students.map(student => ({
+                    ...student,
+                    status: attendanceRecords[student.id]?.status || 'pending',
+                    note: attendanceRecords[student.id]?.note || ''
+                }));
+            }, [students, attendanceRecords]);
+
+            const stats = useMemo(() => {
+                const total = currentViewStudents.length;
+                const counts = currentViewStudents.reduce((acc, curr) => {
+                    acc[curr.status] = (acc[curr.status] || 0) + 1;
+                    return acc;
+                }, {});
+                const presentCount = (counts.present || 0) + (counts.late || 0);
+                const attendanceRate = total === 0 ? 0 : Math.round((presentCount / total) * 100);
+                return { total, counts, attendanceRate };
+            }, [currentViewStudents]);
+
+            // Actions
+            const updateStatus = (studentId, status) => {
+                const newData = { ...attendanceRecords, [studentId]: { ...attendanceRecords[studentId], status } };
+                db.collection('attendance').doc(currentDate).set(newData, { merge: true });
+            };
+
+            const updateNote = (studentId, note) => {
+                const newData = { ...attendanceRecords, [studentId]: { ...attendanceRecords[studentId], note } };
+                db.collection('attendance').doc(currentDate).set(newData, { merge: true });
+            };
+
+            const markAll = (status) => {
+                if(confirm(`ยืนยันเช็ค "${STATUS_CONFIG[status].label}" ให้นักเรียนที่เหลือ?`)) {
+                    const updates = {};
+                    students.forEach(s => {
+                        const current = attendanceRecords[s.id]?.status || 'pending';
+                        if(current === 'pending') {
+                            updates[s.id] = { status: status, note: '' };
+                        }
+                    });
+                    db.collection('attendance').doc(currentDate).set(updates, { merge: true });
+                }
+            };
+
+            const resetCurrentDay = () => {
+                if(confirm('รีเซ็ตข้อมูลวันนี้?')) {
+                    db.collection('attendance').doc(currentDate).delete();
+                }
+            };
+
+            // Student Manager
+            const addStudent = (name, sid) => {
+                db.collection('students').add({ name, studentId: sid });
+            };
+            const deleteStudent = (id) => {
+                if(confirm('ลบรายชื่อ?')) db.collection('students').doc(id).delete();
+            }
+
+            // Reports
+            const generateReport = () => {
+                const dateStr = new Date(currentDate).toLocaleDateString('th-TH', { dateStyle: 'long' });
+                const presentTotal = (stats.counts.present || 0) + (stats.counts.late || 0);
+                let report = `📊 สรุปการมาเรียน (${settings.className})\n📅 ${dateStr}\n\n`;
+                report += `👨‍🎓 ทั้งหมด: ${stats.total} คน\n`;
+                report += `✅ มา: ${presentTotal} (${stats.attendanceRate}%)\n`;
+                report += `❌ ขาด/ลา/ป่วย: ${(stats.counts.absent||0)+(stats.counts.leave||0)+(stats.counts.sick||0)}\n`;
+                return report;
+            };
+
+            const copyReport = () => {
+                navigator.clipboard.writeText(generateReport());
+                alert('คัดลอกเรียบร้อย');
+            };
+
+            // --- Views ---
+            if(loading) return <div className="flex h-screen items-center justify-center text-slate-500 font-medium animate-pulse">กำลังโหลดข้อมูล...</div>;
+
+            if(!user) {
+                return (
+                    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                        <div className="bg-white w-full max-w-md p-8 rounded-3xl shadow-xl border border-slate-100">
+                            <div className="flex flex-col items-center mb-8">
+                                <div className="w-16 h-16 bg-gradient-to-br from-brand-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-brand-200 mb-4">
+                                    <Icons.GraduationCap size={32} />
+                                </div>
+                                <h1 className="text-2xl font-bold text-slate-800">SmartCheck</h1>
+                                <p className="text-slate-500">ระบบเช็คชื่อออนไลน์</p>
+                            </div>
+                            <form onSubmit={handleLogin} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">อีเมล</label>
+                                    <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-brand-500" required placeholder="name@school.com"/>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">รหัสผ่าน</label>
+                                    <input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-brand-500" required placeholder="••••••"/>
+                                </div>
+                                {loginError && <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm flex items-center gap-2"><Icons.AlertCircle size={16}/> {loginError}</div>}
+                                <button type="submit" className="w-full bg-brand-600 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-brand-200 hover:bg-brand-500 active:scale-98 transition-all">เข้าสู่ระบบ</button>
+                            </form>
+                            <div className="mt-6 text-xs text-center text-slate-400">
+                                <p><strong>ทดสอบสิทธิ์:</strong> ใช้อีเมลที่มีคำว่า 'admin' หรือ 'student' เพื่อเปลี่ยนมุมมอง</p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // --- Components ---
+            const SidebarItem = ({ id, icon: Icon, label, disabled }) => {
+                if (disabled) return null;
+                return (
+                    <button onClick={() => { setActiveTab(id); setSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all active:scale-95 ${activeTab === id ? 'bg-brand-600 text-white shadow-lg shadow-brand-200' : 'text-slate-500 hover:bg-slate-50'}`}>
+                        <Icon size={22} className={activeTab === id ? 'text-white' : 'text-slate-400'} />
+                        <span className="font-medium text-lg">{label}</span>
+                    </button>
+                );
+            };
+
+            // Dashboard View
+            const DashboardView = () => {
+                // Student View Logic
+                if (userRole === 'student') {
+                    // Logic to calculate student's own stats (simplified)
+                    // In real app, we would query filtering by student ID
+                    // Here we assume student ID 1 for demo purposes if not linked properly
+                    return (
+                        <div className="space-y-6 animate-fade-in-up pb-20">
+                            <div className="px-1"><h2 className="text-xl font-bold text-slate-800">สวัสดี, นักเรียน 👋</h2><p className="text-slate-500 text-sm">ข้อมูลการเข้าเรียนส่วนตัว</p></div>
+                            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                                <div className="w-24 h-24 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 font-bold text-4xl mb-4 shadow-inner">N</div>
+                                <div className="text-5xl font-bold text-slate-800 mb-1">85%</div>
+                                <div className="text-slate-500 text-sm font-medium bg-slate-100 px-3 py-1 rounded-full">อัตราการเข้าเรียน</div>
+                            </div>
+                            <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 flex gap-3">
+                                <Icons.AlertCircle className="text-amber-500 flex-shrink-0" />
+                                <div className="text-sm text-amber-800">อย่าลืมส่งใบลาป่วยย้อนหลังสำหรับวันที่ 12 ต.ค.</div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                // Teacher/Admin View
+                const gradientString = `conic-gradient(#10b981 0deg ${stats.attendanceRate * 3.6}deg, #f1f5f9 ${stats.attendanceRate * 3.6}deg 360deg)`;
+                
+                return (
+                    <div className="space-y-6 pb-20 animate-fade-in-up">
+                        <div className="px-1"><h2 className="text-xl font-bold text-slate-800">ภาพรวม</h2><p className="text-slate-500 text-sm">สถิติวันที่ {new Date(currentDate).toLocaleDateString('th-TH', { dateStyle: 'long' })}</p></div>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100"><div className="text-sm text-slate-500">ทั้งหมด</div><div className="text-2xl font-bold">{stats.total}</div></div>
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100"><div className="text-sm text-slate-500">มาเรียน</div><div className="text-2xl font-bold text-emerald-600">{(stats.counts.present||0)+(stats.counts.late||0)}</div></div>
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100"><div className="text-sm text-slate-500">ขาด/ลา</div><div className="text-2xl font-bold text-rose-600">{(stats.counts.absent||0)+(stats.counts.leave||0)}</div></div>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center gap-6">
+                                <h3 className="w-full text-lg font-bold text-slate-700 flex items-center gap-2"><Icons.PieChart size={20} className="text-brand-500"/> สัดส่วนวันนี้</h3>
+                                <div className="relative w-48 h-48 flex-shrink-0">
+                                    <div className="absolute inset-0 rounded-full" style={{ background: gradientString, transform: 'rotate(0deg)' }}></div>
+                                    <div className="absolute inset-4 bg-white rounded-full flex flex-col items-center justify-center shadow-inner"><span className="text-4xl font-bold text-slate-800">{stats.attendanceRate}%</span></div>
+                                </div>
+                                <div className="w-full grid grid-cols-2 gap-3">
+                                    {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                                        <div key={key} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                                            <div className="flex items-center gap-2"><div className={`w-2.5 h-2.5 rounded-full`} style={{ backgroundColor: config.hex }}></div><span className="text-sm font-medium text-slate-600">{config.label}</span></div>
+                                            <span className="font-bold text-slate-800">{stats.counts[key] || 0}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                                <h3 className="w-full text-lg font-bold text-slate-700 flex items-center gap-2 mb-4"><Icons.AlertCircle size={20} className="text-rose-500"/> รายชื่อคนไม่มา</h3>
+                                <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
+                                    {currentViewStudents.filter(s => ['absent', 'sick', 'leave'].includes(s.status)).map(s => (
+                                        <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold ${getAvatarColor(s.id)}`}>{getInitials(s.name)}</div>
+                                            <div className="flex-1"><p className="text-sm font-bold text-slate-800">{s.name}</p><p className="text-xs text-slate-500">{STATUS_CONFIG[s.status].label}</p></div>
+                                        </div>
+                                    ))}
+                                    {currentViewStudents.filter(s => ['absent', 'sick', 'leave'].includes(s.status)).length === 0 && <div className="text-center text-slate-400 py-8">มาครบทุกคน!</div>}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            // Attendance List
+            const AttendanceView = () => {
+                if (userRole === 'student') return null; // Protect route
+                
+                const [searchTerm, setSearchTerm] = useState('');
+                const [filterStatus, setFilterStatus] = useState('all');
+                
+                const filtered = currentViewStudents.filter(s => 
+                    (filterStatus === 'all' || s.status === filterStatus) &&
+                    (s.name.includes(searchTerm) || s.studentId.includes(searchTerm))
+                );
+
+                return (
+                    <div className="space-y-6 pb-20 animate-fade-in-up">
+                        <div className="flex flex-col gap-4">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-xl font-bold text-slate-800 flex gap-2"><Icons.ListChecks size={24} className="text-brand-600"/> เช็คชื่อ</h2>
+                                <div className="flex bg-slate-100 p-1 rounded-xl">
+                                    <button onClick={()=>setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode==='list'?'bg-white shadow text-brand-600':'text-slate-400'}`}><Icons.LayoutList size={20}/></button>
+                                    <button onClick={()=>setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode==='grid'?'bg-white shadow text-brand-600':'text-slate-400'}`}><Icons.LayoutGrid size={20}/></button>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={()=>markAll('present')} className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold text-sm shadow active:scale-95 transition-all flex items-center justify-center gap-2"><Icons.CheckCircle2 size={18}/> มาครบ</button>
+                                <button onClick={resetCurrentDay} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold text-sm active:scale-95 transition-all flex items-center justify-center gap-2 hover:bg-slate-200"><Icons.RotateCcw size={18}/> รีเซ็ต</button>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-1 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-3">
+                            <div className="relative mx-3 mt-3"><Icons.Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><input className="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-brand-100 outline-none text-base" placeholder="ค้นหา..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/></div>
+                            <div className="flex gap-2 overflow-x-auto pb-3 px-3 no-scrollbar">{['all', ...Object.keys(STATUS_CONFIG)].map(key => (<button key={key} onClick={() => setFilterStatus(key)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all border flex-shrink-0 ${filterStatus === key ? 'bg-slate-800 text-white border-slate-800 shadow-md' : 'bg-white text-slate-600 border-slate-200'}`}>{key === 'all' ? 'ทั้งหมด' : STATUS_CONFIG[key].label}</button>))}</div>
+                        </div>
+
+                        <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 gap-4" : "space-y-3"}>
+                            {filtered.map(student => (
+                                <div key={student.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden transition-all hover:shadow-md">
+                                    {viewMode === 'grid' && <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-2xl text-xs font-bold border-b border-l ${STATUS_CONFIG[student.status].color}`}>{STATUS_CONFIG[student.status].label}</div>}
+                                    <div className={`flex ${viewMode === 'grid' ? 'flex-col items-center text-center mt-2' : 'items-center gap-4'}`}>
+                                        <div className={`rounded-2xl flex items-center justify-center text-white font-bold shadow-md ${getAvatarColor(student.id)} ${viewMode === 'grid' ? 'w-16 h-16 text-2xl mb-3' : 'w-12 h-12 text-lg'}`}>{getInitials(student.name)}</div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-bold text-slate-800 text-lg truncate">{student.name}</h3>
+                                            <p className="text-xs font-mono text-slate-400 bg-slate-50 px-2 py-0.5 rounded inline-block mt-1">{student.studentId}</p>
+                                            {viewMode === 'list' && <span className={`ml-2 text-xs font-bold ${STATUS_CONFIG[student.status].color.split(' ')[0]}`}>{STATUS_CONFIG[student.status].label}</span>}
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 grid grid-cols-3 gap-2">
+                                        <button onClick={()=>updateStatus(student.id, 'present')} className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 flex justify-center active:scale-95 transition-transform"><Icons.CheckCircle2/></button>
+                                        <button onClick={()=>updateStatus(student.id, 'late')} className="p-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 flex justify-center active:scale-95 transition-transform"><Icons.Clock/></button>
+                                        <button onClick={()=>updateStatus(student.id, 'absent')} className="p-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 flex justify-center active:scale-95 transition-transform"><Icons.XCircle/></button>
+                                    </div>
+                                    {viewMode === 'grid' && (
+                                        <div className="flex gap-2 w-full mt-2">
+                                            {['sick', 'leave', 'pending'].map(st => (
+                                                <button key={st} onClick={()=>updateStatus(student.id, st)} className={`flex-1 py-1 rounded-lg text-xs font-medium transition-colors ${student.status===st?'bg-slate-800 text-white':'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>{STATUS_CONFIG[st].label}</button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <input className="w-full bg-slate-50 border-none rounded-xl px-4 py-2 mt-3 text-sm focus:ring-1 focus:ring-brand-300 transition-all placeholder-slate-400" placeholder="หมายเหตุ..." value={student.note} onChange={e => updateNote(student.id, e.target.value)}/>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            // History View (Placeholder - showing mock last 7 days from Firestore logic)
+            const HistoryView = () => {
+                const dates = [];
+                for(let i=0; i<5; i++) {
+                    const d = new Date(); d.setDate(d.getDate()-i); dates.push(d.toISOString().split('T')[0]);
+                }
+                return (
+                    <div className="space-y-6 pb-20 animate-fade-in-up">
+                        <div className="px-1"><h2 className="text-xl font-bold text-slate-800 flex gap-2"><Icons.History size={24} className="text-brand-600"/> ประวัติย้อนหลัง</h2></div>
+                        <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                            <div className="overflow-x-auto pb-2">
+                                <table className="w-full text-sm text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-slate-100">
+                                            <th className="py-4 font-bold text-slate-600 min-w-[150px] sticky left-0 bg-white z-10">รายชื่อ</th>
+                                            {dates.map(d => <th key={d} className="py-4 text-center min-w-[60px] text-xs font-bold text-slate-500">{new Date(d).getDate()}</th>)}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {students.map(s => (
+                                            <tr key={s.id}>
+                                                <td className="py-3 font-medium text-slate-700 sticky left-0 bg-white z-10 border-r border-slate-50">{s.name}</td>
+                                                {dates.map(d => <td key={d} className="py-3 text-center"><div className="w-2 h-2 rounded-full bg-slate-200 mx-auto"></div></td>)}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                <div className="text-center text-xs text-slate-400 mt-4">แสดงผล 5 วันล่าสุด (เชื่อมต่อ Firestore เพื่อดูข้อมูลจริง)</div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            };
+
+            // Student Manager
+            const StudentManager = () => {
+                if (userRole === 'student') return null;
+                const [n, setN] = useState('');
+                const [c, setC] = useState('');
+                return (
+                    <div className="space-y-6 pb-20 animate-fade-in-up">
+                        <div className="px-1"><h2 className="text-xl font-bold text-slate-800 flex gap-2"><Icons.UserCog size={24} className="text-brand-600"/> จัดการรายชื่อ</h2></div>
+                        <div className="bg-brand-50 p-4 rounded-2xl flex gap-2 border border-brand-100">
+                            <input className="flex-1 px-4 py-2 rounded-xl outline-none border border-transparent focus:border-brand-300" placeholder="ชื่อ-นามสกุล" value={n} onChange={e=>setN(e.target.value)}/>
+                            <input className="w-24 px-4 py-2 rounded-xl outline-none border border-transparent focus:border-brand-300" placeholder="รหัส" value={c} onChange={e=>setC(e.target.value)}/>
+                            <button onClick={()=>{if(n){addStudent(n,c); setN(''); setC('');}}} className="bg-brand-600 text-white px-4 rounded-xl shadow-lg active:scale-95 transition-all"><Icons.UserPlus size={20}/></button>
+                        </div>
+                        <div className="grid gap-3">
+                            {students.map(s => (
+                                <div key={s.id} className="bg-white p-3 rounded-xl border border-slate-100 flex justify-between items-center shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm ${getAvatarColor(s.id)}`}>{getInitials(s.name)}</div>
+                                        <div><div className="font-bold text-slate-800">{s.name}</div><div className="text-xs text-slate-400">{s.studentId}</div></div>
+                                    </div>
+                                    <button onClick={()=>deleteStudent(s.id)} className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><Icons.Trash2 size={18}/></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            // Settings
+            const SettingsView = () => {
+                if (userRole !== 'admin') return <div className="h-64 flex flex-col items-center justify-center text-slate-400"><Icons.Lock size={48} className="mb-2 text-slate-200"/><p>สงวนสิทธิ์สำหรับผู้ดูแลระบบ</p></div>;
+                return (
+                    <div className="space-y-6 pb-20 animate-fade-in-up">
+                        <div className="px-1"><h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Icons.Settings size={24} className="text-brand-600"/> ตั้งค่า</h2></div>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+                            <h3 className="font-bold text-slate-700 border-b border-slate-100 pb-2">ข้อมูลพื้นฐาน</h3>
+                            {['schoolName', 'className', 'teacherName'].map(f => (
+                                <div key={f}><label className="text-xs text-slate-400 uppercase font-bold">{f}</label><input className="w-full border-b border-slate-200 py-2 text-slate-700 outline-none focus:border-brand-500 transition-colors" value={settings[f]} onChange={e => { const n={...settings,[f]:e.target.value}; setSettings(n); db.collection('settings').doc('config').set(n); }}/></div>
+                            ))}
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+                            <h3 className="font-bold text-slate-700 border-b border-slate-100 pb-2 text-rose-600">โซนอันตราย</h3>
+                            <button onClick={()=>{if(confirm('ยืนยันล้างข้อมูล?')) setAttendanceRecords({})}} className="w-full p-4 rounded-xl bg-rose-50 text-rose-600 font-medium flex items-center justify-center gap-2 hover:bg-rose-100 transition-colors"><Icons.Trash2 size={18}/> ล้างประวัติการเช็คชื่อทั้งหมด</button>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden relative">
+                    {sidebarOpen && <div className="fixed inset-0 bg-slate-900/60 z-40 lg:hidden backdrop-blur-sm transition-opacity" onClick={() => setSidebarOpen(false)} />}
+                    <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-[80%] max-w-[300px] lg:w-72 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 ease-out shadow-2xl lg:shadow-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+                        <div className="h-20 flex items-center px-6 border-b border-slate-100 justify-between">
+                            <div className="flex items-center gap-3"><div className="w-10 h-10 bg-gradient-to-br from-brand-500 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-brand-200"><Icons.GraduationCap size={20} /></div><div><h1 className="text-lg font-bold text-slate-800 tracking-tight leading-none">SmartCheck</h1><p className="text-xs text-slate-500 font-medium mt-0.5">V.Firebase</p></div></div>
+                            <button onClick={()=>setSidebarOpen(false)} className="lg:hidden text-slate-400 p-2"><Icons.X size={24}/></button>
+                        </div>
+                        <div className="p-6 flex-1 space-y-2 overflow-y-auto">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 px-2">เมนูหลัก</p>
+                            <SidebarItem id="dashboard" icon={Icons.LayoutGrid} label="ภาพรวม" />
+                            <SidebarItem id="attendance" icon={Icons.ListChecks} label="เช็คชื่อ" disabled={userRole === 'student'} />
+                            <SidebarItem id="history" icon={Icons.History} label="ประวัติ" />
+                            {userRole !== 'student' && (
+                                <>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">จัดการ</p>
+                                    <SidebarItem id="students" icon={Icons.UserCog} label="รายชื่อ" />
+                                    <SidebarItem id="settings" icon={Icons.Settings} label="ตั้งค่า" disabled={userRole !== 'admin'} />
+                                </>
+                            )}
+                        </div>
+                        <div className="p-6 border-t border-slate-100 bg-slate-50/50">
+                            <div className="flex items-center gap-3 p-3 rounded-2xl bg-white border border-slate-100 shadow-sm mb-3">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-sm ${userRole === 'admin' ? 'bg-rose-500' : userRole === 'teacher' ? 'bg-indigo-500' : 'bg-emerald-500'}`}><Icons.User size={20} /></div>
+                                <div className="flex-1 min-w-0"><p className="text-sm font-bold text-slate-700 truncate">{user.email.split('@')[0]}</p><p className="text-xs text-slate-500 flex items-center gap-1 capitalize"><span className={`w-1.5 h-1.5 rounded-full ${userRole === 'admin' ? 'bg-rose-500' : userRole === 'teacher' ? 'bg-indigo-500' : 'bg-emerald-500'}`}></span> {userRole}</p></div>
+                            </div>
+                            <button onClick={handleLogout} className="w-full flex justify-center gap-2 p-3 text-sm font-bold text-rose-600 bg-white border border-rose-100 rounded-xl hover:bg-rose-50 transition-colors"><Icons.LogOut size={18}/> ออกจากระบบ</button>
+                        </div>
+                    </aside>
+
+                    <main className="flex-1 flex flex-col min-w-0 h-full relative">
+                        <header className="h-16 lg:h-20 bg-white/90 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 lg:px-10 sticky top-0 z-30 shadow-sm transition-all">
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2.5 -ml-2 rounded-xl text-slate-600 active:scale-95 bg-slate-50"><Icons.Menu size={24} /></button>
+                                <div className="hidden lg:flex items-center gap-2 text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100"><Icons.Calendar size={16} /><span className="text-sm font-medium">{new Date(currentDate).toLocaleDateString('th-TH', { dateStyle: 'long' })}</span></div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input type="date" value={currentDate} onChange={e=>setCurrentDate(e.target.value)} className="w-32 sm:w-auto text-sm border-slate-200 rounded-xl px-3 py-2 outline-none border focus:border-brand-500 transition-colors"/>
+                                {userRole !== 'student' && <button onClick={()=>setShowReportModal(true)} className="bg-brand-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-brand-200 active:scale-95 transition-all flex items-center gap-2"><Icons.Save size={18} /> <span className="hidden sm:inline">สรุป</span></button>}
+                            </div>
+                        </header>
+
+                        <div className="flex-1 overflow-auto p-4 lg:p-8 custom-scrollbar bg-slate-50/50">
+                            <div className="max-w-6xl mx-auto">
+                                {activeTab === 'dashboard' && <DashboardView />}
+                                {activeTab === 'attendance' && <AttendanceView />}
+                                {activeTab === 'history' && <HistoryView />}
+                                {activeTab === 'students' && <StudentManager />}
+                                {activeTab === 'settings' && <SettingsView />}
+                            </div>
+                        </div>
+
+                        {showReportModal && (
+                            <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in-up">
+                                <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
+                                    <div className="p-5 border-b flex justify-between items-center bg-slate-50"><h3 className="font-bold text-slate-800 flex items-center gap-2"><div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg"><Icons.FileText size={18}/></div> สรุปรายงาน</h3><button onClick={()=>setShowReportModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><Icons.X size={20}/></button></div>
+                                    <div className="p-6 overflow-y-auto">
+                                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200"><textarea className="w-full h-48 bg-transparent border-none text-slate-700 resize-none outline-none font-mono text-sm leading-relaxed" readOnly value={generateReport()} /></div>
+                                        <button onClick={copyReport} className="w-full mt-4 bg-emerald-600 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-emerald-200 active:scale-98 transition-all flex items-center justify-center gap-2"><Icons.Copy size={20}/> คัดลอกไปส่งไลน์</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
